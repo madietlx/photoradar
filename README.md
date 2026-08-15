@@ -24,6 +24,12 @@ All components are from the Arduino Student Kit:
 - **Servo (SM-S2309S)**: 5V and GND as normal, with the 100 µF capacitor bridging the two power leads (smooths current spikes from servo movement). Signal (white) wire → pin 3.
 - Arduino UNO connects to the computer via USB, which supplies power and carries the serial data used by the web dashboard.
 
+### Wiring diagram
+
+![photoRADAR wiring diagram](fritzing/photoradar_bb.svg)
+
+The editable Fritzing project is available in [`fritzing/photoradar.fzz`](fritzing/photoradar.fzz).
+
 ## 📁 Repository structure
 
 ```
@@ -33,6 +39,9 @@ photoradar/
 ├── arduino/
 │   └── photoradar/
 │       └── photoradar.ino
+├── fritzing/
+│   ├── photoradar.fzz
+│   └── photoradar_bb.svg
 └── web/
     └── photoradar.html
 ```
