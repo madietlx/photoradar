@@ -59,7 +59,7 @@ photoradar/
 
 ## 🔗 Credits
 
-Based on the Arduino Student Kit (ASK), Lesson 9: Light Wave Radar — [https://studentkit.arduino.cc/studentkit/module/student-kit/lesson/light-wave-radar](https://studentkit.arduino.cc/studentkit/module/student-kit/lesson/light-wave-radar)
+Based on the Arduino Student Kit (ASK), Lesson 9: [Light Wave Radar](https://studentkit.arduino.cc/studentkit/module/student-kit/lesson/light-wave-radar)
 
 The circuit and base sensor concept follow that lesson; the sweep logic, serial protocol, and web dashboard in this repository are original.
 
