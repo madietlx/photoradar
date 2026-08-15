@@ -76,7 +76,7 @@ photoradar/
 A short demonstration of the phototransistor sweeping through 180° while the
 web dashboard visualizes the measured light intensity in real time.
 
-[▶️ Watch the demo video](media/demo.mp4)
+[▶️ Watch the demo video](media/demo.mp4) (84.3 MB)
 
 ## 🔗 Credits
 
