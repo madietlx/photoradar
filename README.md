@@ -21,7 +21,7 @@ All components are from the Arduino Student Kit:
 ## 🔌 Wiring
 
 - **Phototransistor**: Anode → 5V. Cathode → GND through the 10 KΩ resistor. A0 taps the junction between the cathode and the resistor (voltage-divider light sensor).
-- **Servo (SM-S2309S)**: 5V and GND as normal, with the 100 µF capacitor bridging the two power leads (smooths current spikes from servo movement). Signal (white) wire → pin 3.
+- **Servo (SM-S2309S)**: 5V and GND as normal, with the 100 µF capacitor bridging the two power leads (smooths current spikes from servo movement). Signal (yellow) wire → pin 3.
 - Arduino UNO connects to the computer via USB, which supplies power and carries the serial data used by the web dashboard.
 
 ### Wiring diagram
