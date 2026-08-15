@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>photoRADAR — phototransistor sweep scope</title>
+<style>
+  :root{
+    --bg:#06080c;
+    --panel:#0b0f16;
+    --panel-edge:#2b3845;
+    --ink:#97a6b2;
+    --ink-dim:#6e7c88;
+    --amber:#ffb020;
+    --amber-soft:#d98a1a;
+    --hot:#fff3d4;
+    --good:#3ad29f;
+    --bad:#ff5d52;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:
+      radial-gradient(1200px 700px at 50% -10%, #0d1622 0%, transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    min-height:100%;
+    display:flex;
+    flex-direction:column;
+  }
+  /* faint scanlines for the instrument feel */
+  body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:50;
+    background:repeating-linear-gradient(0deg,rgba(255,255,255,.012) 0 1px,transparent 1px 3px);
+    mix-blend-mode:overlay;
+  }
+  header{
+    display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+    padding:16px 22px;border-bottom:1px solid var(--panel-edge);
+  }
+  .brand{display:flex;flex-direction:column;line-height:1}
+  .brand h1{
+    margin:0;font-size:20px;font-weight:650;letter-spacing:-.01em;color:#cdd8e0;
+  }
+  .brand h1 b{color:var(--amber);font-weight:650}
+  .spacer{flex:1}
+  .status{
+    display:flex;align-items:center;gap:9px;font-family:var(--mono);
+    font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink);
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--ink-dim);
+    box-shadow:0 0 0 0 transparent;transition:.3s}
+  .dot.live{background:var(--good);box-shadow:0 0 10px 1px var(--good)}
+  .dot.demo{background:var(--amber);box-shadow:0 0 10px 1px var(--amber)}
+  .dot.err{background:var(--bad);box-shadow:0 0 10px 1px var(--bad)}
+
+  button{
+    font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:#0a0c10;background:var(--amber);border:none;padding:10px 16px;border-radius:7px;
+    cursor:pointer;font-weight:600;transition:.15s;
+  }
+  button:hover{filter:brightness(1.08);transform:translateY(-1px)}
+  button:active{transform:translateY(0)}
+  button.ghost{background:transparent;color:var(--ink);border:1px solid var(--panel-edge)}
+  button.ghost:hover{color:#cdd8e0;border-color:var(--ink);filter:none}
+  button:focus-visible{outline:2px solid var(--hot);outline-offset:2px}
+  button:disabled{opacity:.4;cursor:not-allowed;transform:none;filter:none}
+
+  main{flex:1;display:grid;grid-template-columns:1fr 280px;gap:1px;background:var(--panel-edge);min-height:0}
+  @media(max-width:760px){main{grid-template-columns:1fr;}}
+  .scope,.side{background:var(--panel)}
+  .scope{position:relative;display:flex;align-items:center;justify-content:center;padding:14px;min-height:0}
+  canvas{width:100%;height:100%;display:block}
+
+  .side{padding:18px 20px;display:flex;flex-direction:column;gap:14px;overflow:auto}
+  .read{border:1px solid var(--panel-edge);border-radius:10px;padding:13px 15px;background:linear-gradient(180deg,#0c121b,#0a0e15)}
+  .read .lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.28em;text-transform:uppercase;color:var(--ink-dim)}
+  .read .val{font-family:var(--mono);font-size:30px;color:#dfe7ec;margin-top:5px;font-variant-numeric:tabular-nums;letter-spacing:-.02em;display:flex;align-items:baseline;justify-content:flex-end;gap:5px}
+  .read .val .u{font-size:13px;color:var(--ink);letter-spacing:0}
+  .read .val .num{font-variant-numeric:tabular-nums}
+  .legend{border:1px solid var(--panel-edge);border-radius:10px;padding:13px 15px;background:linear-gradient(180deg,#0c121b,#0a0e15)}
+  .legend-bar{height:14px;border-radius:4px;
+    background:linear-gradient(to right,#3a2410 0%,#a8601e 42%,#ffb020 74%,#fff3d4 100%)}
+  .legend-ticks{display:flex;justify-content:space-between;
+    font-family:var(--mono);font-size:11px;color:var(--ink)}
+  .legend-top{margin-bottom:8px}
+  .legend-bot{margin-top:7px;font-size:10px;color:var(--ink-dim)}
+  .hint{font-size:11px;line-height:1.55;color:var(--ink-dim);border-top:1px dashed var(--panel-edge);padding-top:13px;margin-top:2px}
+  .hint code{font-family:var(--mono);color:var(--amber-soft);background:#0f1620;padding:1px 5px;border-radius:4px}
+  .controls{display:flex;gap:9px;flex-wrap:nowrap}
+  .controls button{flex:0 0 auto;white-space:nowrap}
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <h1>photo<b>RADAR</b></h1>
+    </div>
+    <div class="spacer"></div>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">standby</span></div>
+    <div class="controls" style="flex:0 0 auto">
+      <button id="connectBtn">Connect</button>
+      <button id="demoBtn" class="ghost">Demo</button>
+      <button id="resetBtn" class="ghost">Reset</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="scope"><canvas id="scope"></canvas></div>
+    <aside class="side">
+      <div class="read"><div class="lbl">Angle</div><div class="val"><span class="num" id="vAngle">—</span><span class="u">deg</span></div></div>
+      <div class="read"><div class="lbl">Intensity</div><div class="val"><span class="num" id="vInt">—</span><span class="u">raw</span></div></div>
+      <div class="legend">
+        <div class="legend-ticks legend-top"><span>Dark</span><span>Bright</span></div>
+        <div class="legend-bar"></div>
+        <div class="legend-ticks legend-bot"><span>0</span><span>1023</span></div>
+      </div>
+      <div class="hint" id="hint">
+        Open the Arduino <b>Serial Monitor first and close it</b> — only one program can hold the port. Then hit Connect and pick your board. Reads <code>angle,intensity</code> per line at 9600 baud.
+      </div>
+    </aside>
+  </main>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---- state -------------------------------------------------------------
+  const ANGLES = 181;                 // 0..180 inclusive
+  const data = new Array(ANGLES).fill(null);   // latest raw intensity per angle
+  const seen = new Array(ANGLES).fill(0);      // timestamp of last update (for fade)
+  let curAngle = null, curVal = null;
+  let mode = "idle";                  // idle | live | demo | err
+  let port = null, keepReading = false;
+
+  const $ = id => document.getElementById(id);
+  const dot = $("dot"), statusText = $("statusText");
+
+  function setStatus(m, text){
+    mode = m;
+    dot.className = "dot" + (m==="live"?" live":m==="demo"?" demo":m==="err"?" err":"");
+    statusText.textContent = text;
+  }
+
+  const history = [];                 // completed sweeps, newest at index 0 (each a copy of the current pass)
+  const HISTORY_MAX = 400;
+  let current = new Array(ANGLES).fill(null);   // the pass being measured right now
+  let lastAngle = null, lastDir = 0;
+
+  function record(angle, val){
+    angle = Math.round(angle);
+    if(angle < 0 || angle > 180 || !isFinite(val)) return;
+    data[angle] = val;
+    seen[angle] = performance.now();
+    // detect a completed pass: direction reverses → commit the in-progress row, start fresh
+    if(lastAngle != null && angle !== lastAngle){
+      const dir = angle > lastAngle ? 1 : -1;
+      if(lastDir !== 0 && dir !== lastDir){
+        history.unshift(current.slice());
+        if(history.length > HISTORY_MAX) history.pop();
+        current = new Array(ANGLES).fill(null);
+        current[lastAngle] = data[lastAngle];   // the endpoint is shared by both passes
+      }
+      lastDir = dir;
+    }
+    lastAngle = angle;
+    current[angle] = val;               // fill the live row one reading at a time
+    curAngle = angle; curVal = val;
+    updatePanel();
+  }
+
+  function reset(){
+    data.fill(null); seen.fill(0);
+    curAngle = curVal = null;
+    history.length = 0; current = new Array(ANGLES).fill(null);
+    lastAngle = null; lastDir = 0;
+    updatePanel();
+  }
+
+  function updatePanel(){
+    $("vAngle").textContent = curAngle==null ? "—" : curAngle;
+    $("vInt").textContent   = curVal==null ? "—" : Math.round(curVal);
+  }
+
+  // normalise a raw reading to 0..1 against the fixed 10-bit ADC range
+  const ADC_MAX = 1023;
+  function norm(v){
+    if(v==null) return null;
+    return Math.max(0, Math.min(1, v / ADC_MAX));
+  }
+
+  // ---- line parser: accepts "angle,intensity" OR "Angle:..,Intensity:.." ----
+  function parseLine(line){
+    line = line.trim();
+    if(!line) return;
+    let m = line.match(/angle\s*[:=]?\s*(-?\d+(?:\.\d+)?).*?intensity\s*[:=]?\s*(-?\d+(?:\.\d+)?)/i);
+    if(m){ record(+m[1], +m[2]); return; }
+    const parts = line.split(/[,\s;]+/);
+    if(parts.length>=2 && parts[0]!=="" && parts[1]!=="" && !isNaN(parts[0]) && !isNaN(parts[1])){
+      record(+parts[0], +parts[1]);
+    }
+    // lone numbers / labels / junk are ignored
+  }
+
+  // ---- web serial --------------------------------------------------------
+  async function connect(){
+    if(!("serial" in navigator)){
+      setStatus("err","no web serial");
+      $("hint").innerHTML = "This browser has no Web Serial API. Use <b>Chrome or Edge</b> (desktop), or try Demo to preview.";
+      return;
+    }
+    try{
+      stopDemo();
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 9600 });
+      reset();                       // fresh start: clear any demo/stale data and scale
+      setStatus("live","receiving");
+      $("connectBtn").textContent = "Disconnect";
+      keepReading = true;
+      readLoop();
+    }catch(err){
+      setStatus("err","port refused");
+      $("hint").innerHTML = "Couldn't open the port: <b>"+err.message+"</b>. Make sure the Arduino Serial Monitor / IDE plotter is closed.";
+    }
+  }
+
+  async function readLoop(){
+    const decoder = new TextDecoderStream();
+    const readableClosed = port.readable.pipeTo(decoder.writable).catch(()=>{});
+    const reader = decoder.readable.getReader();
+    let buf = "";
+    try{
+      while(keepReading){
+        const { value, done } = await reader.read();
+        if(done) break;
+        buf += value;
+        let i;
+        while((i = buf.indexOf("\n")) >= 0){
+          parseLine(buf.slice(0, i));
+          buf = buf.slice(i + 1);
+        }
+      }
+    }catch(_){ /* device unplugged etc. */ }
+    finally{
+      try{ reader.releaseLock(); }catch(_){}
+      try{ await port.close(); }catch(_){}
+      readableClosed.catch(()=>{});
+    }
+  }
+
+  async function disconnect(){
+    keepReading = false;
+    $("connectBtn").textContent = "Connect";
+    setStatus("idle","standby");
+  }
+
+  $("connectBtn").addEventListener("click", () => {
+    if(mode==="live") disconnect(); else connect();
+  });
+
+  // ---- demo: simulate a servo sweep past a virtual light source ----------
+  let demoTimer = null, demoAngle = 0, demoDir = 3, demoSrc = 55;
+  function startDemo(){
+    stopLive();
+    reset();                         // clean slate each time demo starts
+    setStatus("demo","simulating");
+    $("connectBtn").textContent = "Connect";
+    demoAngle = 0; demoDir = 3;          // always begin the sweep at 0°
+    demoTimer = setInterval(() => {
+      const sigma = 26;
+      const peak = 1010, base = 12;
+      const g = Math.exp(-((demoAngle - demoSrc)**2) / (2*sigma*sigma));
+      const v = base + peak*g + (Math.random()*40 - 20);
+      record(demoAngle, Math.max(0, Math.min(ADC_MAX, v)));   // clamp to 0–1023 like the real ADC
+      demoAngle += demoDir;                // then advance
+      if(demoAngle >= 180){ demoAngle = 180; demoDir = -3; demoSrc = 30 + Math.random()*120; }
+      else if(demoAngle <= 0){ demoAngle = 0; demoDir = 3; }
+    }, 100);
+  }
+  function stopDemo(){ if(demoTimer){ clearInterval(demoTimer); demoTimer=null; } }
+  function stopLive(){ keepReading = false; }
+  $("demoBtn").addEventListener("click", () => {
+    if(mode==="demo"){ stopDemo(); setStatus("idle","standby"); }
+    else { startDemo(); }
+  });
+  $("resetBtn").addEventListener("click", reset);
+
+  // ---- rendering ---------------------------------------------------------
+  const canvas = $("scope"), ctx = canvas.getContext("2d");
+  let W=0, H=0, cx=0, cy=0, R=0, dpr=1;
+  let chTop=0, chBot=0;               // line-chart band bounds
+  let wfTop=0, wfBot=0;               // waterfall band bounds
+
+  function resize(){
+    const r = canvas.parentElement.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = r.width; H = r.height;
+    canvas.width = W*dpr; canvas.height = H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    const padSide = 34, padTop = 8, padBottom = 14, labelPad = 20;
+    const chH = 60, minWf = 90, gap = 26;
+    const ringR = Math.max(30, Math.min((W - 2*padSide)/2,
+                    H - padTop - padBottom - labelPad - chH - minWf - gap*2));
+    R = ringR / BAND;
+    cx = W/2;
+    cy = padTop + labelPad + ringR;     // dome baseline
+    chTop = cy + gap;                   // line chart sits just under the dome
+    chBot = chTop + chH;
+    wfTop = chBot + gap;                // waterfall fills the rest
+    wfBot = H - padBottom;
+  }
+  window.addEventListener("resize", resize);
+
+  // servo angle (0 right → 90 up → 180 left), math angle in radians
+  const pt = (deg, rad) => [ cx + rad*Math.cos(deg*Math.PI/180), cy - rad*Math.sin(deg*Math.PI/180) ];
+
+  const BAND = 0.82;   // fixed reading radius (fraction of R) — distance carries no meaning
+
+  function drawGrid(){
+    const band = R*BAND;
+    // bearing spokes + angle labels
+    ctx.fillStyle = "#8a99a6";
+    ctx.font = "10px ui-monospace,monospace";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for(let a=0;a<=180;a+=30){
+      const [x,y] = pt(a, band);
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y);
+      ctx.strokeStyle = "#3c4d5a"; ctx.lineWidth = 1; ctx.stroke();
+      const [lx,ly] = pt(a, band+16);
+      ctx.fillText(a+"°", lx, ly);
+    }
+    // baseline
+    ctx.beginPath();
+    ctx.moveTo(...pt(180, band)); ctx.lineTo(...pt(0, band));
+    ctx.strokeStyle = "#52677a"; ctx.lineWidth = 1; ctx.stroke();
+    // outer reading ring — the frame the wedges reach out to (distance carries no meaning)
+    ctx.beginPath();
+    ctx.arc(cx, cy, band, Math.PI, 0, false);
+    ctx.strokeStyle = "#5e768a"; ctx.lineWidth = 1.4; ctx.stroke();
+  }
+
+  // filled wedges: each bearing is a sector from an inner margin out to the ring,
+  // tiling edge-to-edge so the sweep paints in the whole fan. brightness = colour.
+  function drawBand(now){
+    const ro = R*BAND;          // wedges reach the outer ring
+    const ri = R*BAND*0.20;     // empty margin sits near the pivot instead
+    // present bearings, ascending — used to size each wedge to meet its neighbours
+    const idx = [];
+    for(let a=0;a<=180;a++) if(data[a]!=null) idx.push(a);
+    for(let i=0;i<idx.length;i++){
+      const a = idx[i];
+      const fade = Math.max(0, 1 - (now - seen[a])/12000);
+      if(fade<=0) continue;
+      const prevA = i>0 ? idx[i-1] : a-3;
+      const nextA = i<idx.length-1 ? idx[i+1] : a+3;
+      const left  = Math.max(0,   Math.max(a - 4, (prevA + a)/2));   // span halfway to each neighbour,
+      const right = Math.min(180, Math.min(a + 4, (a + nextA)/2));   // clamped to 0–180 and to real gaps
+      const n = norm(data[a]);
+      const g = Math.round(150 + 93*n);               // amber → pale gold
+      const b = Math.round(40 + 172*n);               //   →   white-hot
+      const al = (0.30 + 0.55*n) * (0.45 + 0.55*fade);
+      const [lx,ly]   = pt(left,  ro);
+      const [rx,ry]   = pt(right, ro);
+      const [lix,liy] = pt(left,  ri);
+      const [rix,riy] = pt(right, ri);
+      ctx.beginPath();
+      ctx.moveTo(lix, liy);
+      ctx.lineTo(lx, ly);
+      ctx.lineTo(rx, ry);
+      ctx.lineTo(rix, riy);
+      ctx.closePath();
+      ctx.fillStyle = `rgba(255,${g},${b},${al})`;
+      ctx.fill();
+    }
+  }
+
+  function drawNeedle(){
+    if(curAngle==null) return;
+    const band = R*BAND;
+    const [x,y] = pt(curAngle, band);
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y);
+    ctx.strokeStyle = "#ffb020"; ctx.lineWidth = 2;
+    ctx.shadowColor = "#ffb020"; ctx.shadowBlur = 14; ctx.stroke();
+    ctx.restore();
+  }
+
+  // shared horizontal axis: 0° at the dome's right edge, 180° at its left edge
+  function axisX(){ const xR = cx + R*BAND, xL = cx - R*BAND; return { xL, xR, w: xR - xL, map: a => xR - (a/180)*(xR - xL) }; }
+
+  // flat intensity-vs-angle bar chart of the latest full profile, updates live as readings replace
+  function drawChart(){
+    const { xL, xR, map } = axisX();
+    const h = chBot - chTop;
+    // frame: baseline, top, dashed mid
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "#243341";
+    ctx.beginPath(); ctx.moveTo(xL, chBot); ctx.lineTo(xR, chBot); ctx.stroke();
+    ctx.strokeStyle = "#1a2530";
+    ctx.beginPath(); ctx.moveTo(xL, chTop); ctx.lineTo(xR, chTop); ctx.stroke();
+    ctx.save(); ctx.setLineDash([2,4]);
+    ctx.beginPath(); ctx.moveTo(xL, (chTop+chBot)/2); ctx.lineTo(xR, (chTop+chBot)/2); ctx.stroke();
+    ctx.restore();
+    // bars: one per bearing, height = intensity, coloured by the same ramp
+    const idx = [];
+    for(let a=0;a<=180;a++) if(data[a]!=null) idx.push(a);
+    for(let i=0;i<idx.length;i++){
+      const a = idx[i];
+      const n = norm(data[a]);
+      const x = map(a);
+      const prevA = i>0 ? idx[i-1] : a-3;
+      const nextA = i<idx.length-1 ? idx[i+1] : a+3;
+      const gap = Math.min(Math.abs(map(prevA)-x), Math.abs(map(nextA)-x));
+      const bw = Math.max(2, gap*0.8);
+      const bh = n*h;
+      const g = Math.round(150 + 93*n);
+      const b = Math.round(40 + 172*n);
+      if(n > 0.6){ ctx.shadowColor = "rgba(255,205,130,0.5)"; ctx.shadowBlur = 6 + 8*n; }
+      ctx.fillStyle = `rgba(255,${g},${b},${0.5 + 0.45*n})`;
+      ctx.fillRect(x - bw/2, chBot - bh, bw, bh);
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  // waterfall: each completed sweep as a horizontal strip, newest on top, scrolling down.
+  // x maps to bearing the same way as the dome (0° right, 180° left) so they line up.
+  function drawWaterfall(){
+    const { xL, xR, w, map: mapX } = axisX();
+    const rowH = 5;
+    const colW = Math.ceil(w/180) + 1;
+    const drawRow = (row, y, depth) => {
+      for(let a=0; a<=180; a++){
+        const v = row[a];
+        if(v==null) continue;
+        const n = norm(v);
+        const g = Math.round(150 + 93*n);
+        const b = Math.round(40 + 172*n);
+        const al = (0.30 + 0.6*n) * depth;
+        ctx.fillStyle = `rgba(255,${g},${b},${al})`;
+        ctx.fillRect(mapX(a) - colW/2, y, colW, rowH - 0.5);
+      }
+    };
+    // top row = the pass being measured right now, fills in cell by cell
+    drawRow(current, wfTop, 1);
+    // completed sweeps stack below, newest first, fading slightly with depth
+    const rowsAvail = Math.floor((wfBot - wfTop)/rowH) - 1;
+    const rows = Math.min(history.length, Math.max(0, rowsAvail));
+    for(let r=0; r<rows; r++){
+      drawRow(history[r], wfTop + (r+1)*rowH, 1 - ((r+1)/(rows+1))*0.4);
+    }
+  }
+
+  function drawHeadings(){
+    const { xL } = axisX();
+    ctx.save();
+    ctx.font = "9px ui-monospace,monospace";
+    ctx.fillStyle = "#7a8794";
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    if("letterSpacing" in ctx) ctx.letterSpacing = "2px";
+    ctx.fillText("LIVE",    xL, chTop - 6);
+    ctx.fillText("HISTORY", xL, wfTop - 6);
+    ctx.restore();
+  }
+
+  function frame(){
+    const now = performance.now();
+    ctx.clearRect(0,0,W,H);
+    drawGrid();
+    drawBand(now);
+    drawNeedle();
+    // center hub
+    ctx.beginPath(); ctx.arc(cx,cy,4,0,Math.PI*2); ctx.fillStyle="#26333f"; ctx.fill();
+    drawChart();
+    drawWaterfall();
+    drawHeadings();
+    requestAnimationFrame(frame);
+  }
+
+  resize();
+  updatePanel();
+  setStatus("idle","standby");
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
