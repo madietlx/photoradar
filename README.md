@@ -42,6 +42,9 @@ photoradar/
 ├── fritzing/
 │   ├── photoradar.fzz
 │   └── photoradar_bb.svg
+├── media/
+│   ├── dashboard.png
+│   └── demo.mp4
 └── web/
     └── photoradar.html
 ```
@@ -65,6 +68,15 @@ photoradar/
 1. Open `web/photoradar.html`.
 2. Click **Connect** and select your Arduino's serial port.
 3. Watch the sweep render live. Use **Demo** to preview the UI without hardware, and **Reset** to clear the display.
+
+## 🎥 Demo
+
+![photoRADAR dashboard](media/dashboard.png)
+
+A short demonstration of the phototransistor sweeping through 180° while the
+web dashboard visualizes the measured light intensity in real time.
+
+[▶️ Watch the demo video](media/demo.mp4)
 
 ## 🔗 Credits
 
