@@ -2,6 +2,20 @@
 
 A phototransistor "radar" built on an Arduino UNO: a servo sweeps a phototransistor back and forth across a 180° arc, measuring ambient light intensity at each angle. A companion web dashboard (using the Web Serial API) reads the live angle/intensity stream over USB and renders it as a radar-style sweep, a live bar chart, and a scrolling waterfall history.
 
+## 📑 Contents
+
+- [How it works](#-how-it-works)
+- [Hardware](#-hardware)
+- [Wiring](#-wiring)
+  - [Wiring diagram](#wiring-diagram)
+- [Repository structure](#-repository-structure)
+- [Getting started](#-getting-started)
+  - [1. Flash the Arduino](#1-flash-the-arduino)
+  - [2. Open the dashboard](#2-open-the-dashboard)
+- [Demo](#-demo)
+- [Credits](#-credits)
+- [License](#-license)
+
 ## 🔦 How it works
 
 The Arduino sketch sweeps a servo from 0° to 180° and back, pausing briefly at each step to take an analog reading from the phototransistor. Each reading is sent over serial as a simple `angle,intensity` line at 9600 baud. The web dashboard connects to the board over Web Serial, parses that stream, and visualizes it in real time — no server, no build step, just one HTML file.
